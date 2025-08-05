@@ -206,6 +206,17 @@ def validate(
     asyncio.run(_run_validation(skills_dir, generate_report))
 
 
+@app.command()
+def retrieve(
+    task: str = typer.Argument(..., help="Task description to find skills for"),
+    skills_dir: str = typer.Option("compiled_skills", help="Directory containing compiled skills"),
+    confidence_threshold: float = typer.Option(0.8, help="Minimum confidence threshold for skill selection"),
+    execute: bool = typer.Option(False, help="Execute the retrieved skill if found")
+):
+    """Run Phase 6: Skill Retrieval & Execution."""
+    asyncio.run(_run_retrieval(task, skills_dir, confidence_threshold, execute))
+
+
 async def _run_compilation(limit: int, strategy: str, output_dir: str, min_confidence: float):
     """Internal compilation runner."""
     console.print(f"🔧 Starting Phase 4: Skill Compilation", style="bold blue")
@@ -421,6 +432,110 @@ async def _run_validation(skills_dir: str, generate_report: bool):
     # Report path
     if generate_report:
         console.print(f"\n📊 Detailed report: {results['report_path']}", style="bold blue")
+
+
+async def _run_retrieval(task: str, skills_dir: str, confidence_threshold: float, execute: bool):
+    """Internal retrieval runner for Phase 6."""
+    console.print(f"🔍 Starting Phase 6: Skill Retrieval & Execution", style="bold blue")
+    console.print(f"🎯 Task: {task}")
+    console.print(f"📂 Skills directory: {skills_dir}")
+    console.print(f"🎚️  Confidence threshold: {confidence_threshold:.1f}")
+    
+    # Initialize components
+    storage = TraceStorage()
+    await storage.initialize()
+    
+    # Import the retrieval system
+    from .retrieval import SkillRegistry, SkillAwareAgent
+    
+    registry = SkillRegistry(storage)
+    await registry.initialize()
+    
+    # Load skills
+    skills_path = Path(skills_dir)
+    if not skills_path.exists():
+        console.print(f"❌ Skills directory not found: {skills_dir}", style="bold red")
+        console.print("Run 'asc compile' first to generate skills!")
+        return
+    
+    loaded_count = await registry.load_skills_from_directory(skills_path)
+    
+    if loaded_count == 0:
+        console.print(f"❌ No skills found in {skills_dir}", style="bold red")
+        console.print("Run 'asc compile' first to generate skills!")
+        return
+    
+    console.print(f"📦 Loaded {loaded_count} skills into registry")
+    
+    # Find best matching skill
+    matching_skill = await registry.find_best_skill(task, confidence_threshold)
+    
+    if not matching_skill:
+        console.print(f"💔 No skill meets confidence threshold {confidence_threshold:.1f}", style="yellow")
+        console.print("Falling back to normal tool planning...")
+        
+        # Show available skills for reference
+        registry_summary = registry.get_skills_summary()
+        if registry_summary["skills"]:
+            console.print(f"\n📋 Available skills:", style="bold")
+            table = Table()
+            table.add_column("Name", style="cyan")
+            table.add_column("Confidence", style="yellow")
+            table.add_column("Pattern", style="white")
+            
+            for skill_info in registry_summary["skills"]:
+                pattern_str = " → ".join(skill_info["pattern"])
+                table.add_row(
+                    skill_info["name"],
+                    f"{skill_info['confidence']:.1%}",
+                    pattern_str
+                )
+            
+            console.print(table)
+        return
+    
+    # Show matched skill
+    console.print(f"\n✅ Found matching skill: {matching_skill.name}", style="bold green")
+    console.print(f"   Confidence: {matching_skill.confidence:.1%}")
+    console.print(f"   Pattern: {' → '.join(matching_skill.pattern)}")
+    console.print(f"   Description: {matching_skill.description}")
+    
+    if not execute:
+        console.print(f"\n💡 Add --execute to run this skill", style="blue")
+        return
+    
+    # Execute the skill
+    console.print(f"\n⚡ Executing skill...", style="bold yellow")
+    
+    try:
+        agent = SkillAwareAgent("cli-agent", registry, storage, confidence_threshold)
+        trace = await agent.execute_task(task)
+        
+        # Show execution results
+        if trace.final_success:
+            console.print(f"✅ Skill executed successfully!", style="bold green")
+        else:
+            console.print(f"❌ Skill execution failed", style="bold red")
+        
+        console.print(f"   Total cost: {trace.total_cost:.2f}")
+        console.print(f"   Total latency: {trace.total_latency_ms:.1f}ms")
+        console.print(f"   Tool calls: {len(trace.tool_calls)}")
+        
+        # Show tool call details
+        if trace.tool_calls:
+            console.print(f"\n📋 Execution details:", style="bold")
+            for i, call in enumerate(trace.tool_calls, 1):
+                status = "✅" if call.success else "❌"
+                console.print(f"   {i}. {call.tool_name}: {status}")
+        
+        # Show agent performance
+        agent_stats = agent.get_performance_summary()
+        console.print(f"\n📊 Agent Performance:", style="bold")
+        console.print(f"   Skill usage rate: {agent_stats.get('skill_usage_rate', 0):.1%}")
+        console.print(f"   Total tasks: {agent_stats['total_tasks']}")
+        
+    except Exception as e:
+        console.print(f"❌ Execution error: {e}", style="bold red")
 
 
 if __name__ == "__main__":
