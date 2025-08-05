@@ -1,0 +1,37 @@
+{
+  "_description": "Default Configuration for Agentic Skill Compiler. Copy to config.local.json and modify for your environment.",
+  "mining": {
+    "min_support_percent": 2.0,
+    "min_success_rate": 0.85,
+    "max_cost_ratio": 0.8,
+    "min_pattern_length": 2,
+    "max_pattern_length": 6,
+    "trace_analysis_limit": 10000
+  },
+  "compilation": {
+    "strategy": "python_macro",
+    "validation_samples": 100,
+    "validation_threshold": 0.98
+  },
+  "validation": {
+    "unit_test_count": 50,
+    "fuzz_test_count": 25,
+    "unit_test_threshold": 0.95,
+    "fuzz_test_threshold": 0.85,
+    "max_cost_delta": 0.0
+  },
+  "retrieval": {
+    "confidence_threshold": 0.8,
+    "precision_test_queries": 500,
+    "target_precision": 0.9
+  },
+  "system": {
+    "dynamic_cost_measurement": true,
+    "cost_measurement_window": 100,
+    "auto_compilation": false,
+    "min_traces_for_mining": 50,
+    "mining_frequency": 100,
+    "max_active_skills": 500,
+    "min_weekly_usage": 5
+  }
+}

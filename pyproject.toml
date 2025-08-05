@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-skill-compiler"
+version = "0.1.0"
+description = "Human-centric skill compilation for multi-agent systems"
+authors = [{name = "D. Visca", email = "daniel@example.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.19",
+    "httpx>=0.24",
+    "typer>=0.9",
+    "rich>=13.0",
+    "ollama>=0.1",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "asyncio-throttle>=1.0",
+    "prefixspan>=0.5"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "black>=23.0",
+    "ruff>=0.1",
+    "mypy>=1.5"
+]
+
+[project.scripts]
+asc = "asc.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["asc"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "T20"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
