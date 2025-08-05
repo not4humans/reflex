@@ -2,19 +2,33 @@
 
 This document captures key improvements needed to make the Agentic Skill Compiler more aligned with how humans actually develop and use procedural skills.
 
+## ✅ COMPLETED: Context-Aware Skill Learning (August 2025)
+
+### Context-Sensitive Skill Learning ✅
+**Status**: IMPLEMENTED - Skills now adapt based on execution context
+
+**What We Built**:
+- Context embeddings for skill conditions (environment state, authentication, resource availability)
+- Conditional skill execution based on environmental factors
+- Context analysis module that extracts success/failure patterns from traces
+- Multi-context skill compilation and retrieval
+
+**Key Features Added**:
+- `execution_context`, `preconditions_met`, `failure_indicators` in ToolCall model
+- `success_conditions`, `context_adaptations`, `failure_patterns` in CompiledSkillMetadata
+- Context-aware pattern mining and skill compilation
+- Context compatibility scoring in skill retrieval
+- Adaptive skill execution with real-time context assessment
+
+**Example**: Azure deployment skill now:
+- Detects authentication state and logs in if needed
+- Handles network instability with retry logic
+- Creates missing resource groups automatically
+- Adapts execution based on 15+ context factors
+
 ## 🧠 Core Human Learning Principles to Implement
 
-### 1. Context-Sensitive Skill Learning
-**Current Limitation**: Skills are compiled from patterns without considering task context, environmental state, or situational awareness.
-
-**Human Analogy**: A human doesn't just learn "crack eggs → add flour → mix" as a universal skill. They learn "when making pancakes, if batter is too thick, crack eggs → add flour → mix until right consistency."
-
-**Implementation Needed**:
-- Context embeddings for skill conditions (task type, environment state, previous failures)
-- Conditional skill execution based on environmental factors
-- Multi-modal context (not just tool sequences, but tool arguments, results, timing)
-
-### 2. Skill Composition and Hierarchical Learning
+### 1. Skill Composition and Hierarchical Learning
 **Current State**: Individual skills are atomic and can't be combined.
 
 **Human Analogy**: Humans build complex skills from simpler ones (driving = starting car + steering + acceleration control + navigation).
@@ -24,7 +38,7 @@ This document captures key improvements needed to make the Agentic Skill Compile
 - Automatic skill chaining for complex tasks
 - Hierarchical skill compilation (micro-skills → macro-skills → complex workflows)
 
-### 3. Adaptive Skill Refinement
+### 2. Adaptive Skill Refinement
 **Current State**: Skills are static once compiled.
 
 **Human Analogy**: Humans continuously refine skills based on outcomes (adjusting cooking technique based on taste, improving typing speed through practice).
@@ -35,7 +49,7 @@ This document captures key improvements needed to make the Agentic Skill Compile
 - Version control for skills with performance-based selection
 - Skill "muscle memory" - frequently used skills become more optimized
 
-### 4. Emotional and Motivational Context
+### 3. Emotional and Motivational Context
 **Current State**: No consideration of agent "preferences" or optimization goals.
 
 **Human Analogy**: Humans develop skills differently based on personal goals (speed vs quality, effort vs outcome).

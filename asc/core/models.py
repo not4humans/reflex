@@ -26,9 +26,14 @@ class ToolCall(BaseModel):
     latency_ms: float
     cost_estimate: float  # In arbitrary cost units for now
     
-    # Context for pattern mining
+    # Context for pattern mining and skill learning
     context_embedding: Optional[List[float]] = None  # Will implement later
     preceding_tools: List[str] = Field(default_factory=list)  # Last N tool names
+    
+    # NEW: Context-aware skill learning
+    execution_context: Optional[Dict[str, Any]] = None  # Environment state when tool executed
+    preconditions_met: Optional[Dict[str, bool]] = None  # Success predictors
+    failure_indicators: Optional[Dict[str, Any]] = None  # Failure reasons if unsuccessful
 
 
 class TaskTrace(BaseModel):
@@ -92,6 +97,11 @@ class CompiledSkillMetadata(BaseModel):
     avg_latency_ms: float
     created_at: datetime = Field(default_factory=lambda: datetime.now())
     source_pattern_id: Optional[str] = None
+    
+    # NEW: Context-aware skill metadata
+    success_conditions: Optional[Dict[str, List[str]]] = None  # Required conditions for success
+    context_adaptations: Optional[Dict[str, str]] = None  # Adaptations for different contexts
+    failure_patterns: Optional[Dict[str, Any]] = None  # Known failure scenarios to avoid
 
 
 class SkillRetrievalCandidate(BaseModel):

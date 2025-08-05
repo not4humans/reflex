@@ -46,6 +46,11 @@ class CompiledSkill:
         self.success_rate = metadata.get('success_rate', 0.0)
         self.avg_cost = metadata.get('avg_cost', 0.0)
         
+        # Context-aware metadata
+        self.success_conditions = metadata.get('success_conditions', {})
+        self.context_adaptations = metadata.get('context_adaptations', {})
+        self.failure_patterns = metadata.get('failure_patterns', {})
+        
         # Execution details
         self.skill_function = skill_function
         self.file_path = file_path
@@ -56,13 +61,20 @@ class CompiledSkill:
         # Performance tracking
         self.execution_history = []
         
-    async def execute(self, **kwargs) -> Any:
-        """Execute the compiled skill with given parameters."""
+    async def execute(self, execution_context: Dict[str, Any] = None, **kwargs) -> Any:
+        """Execute the compiled skill with given parameters and context."""
         start_time = datetime.now()
         
         try:
+            # Check if this skill can handle the current context
+            context_confidence = self._assess_context_compatibility(execution_context or {})
+            
             # Filter kwargs to only include skill parameters
             filtered_kwargs = {k: v for k, v in kwargs.items() if k in self.parameters}
+            
+            # Add execution context if the skill function supports it
+            if 'execution_context' in self.parameters:
+                filtered_kwargs['execution_context'] = execution_context
             
             # Execute the skill function
             result = await self.skill_function(**filtered_kwargs)
@@ -71,27 +83,75 @@ class CompiledSkill:
             self.usage_count += 1
             self.last_used = datetime.now()
             
-            # Record execution history
+            # Record execution history with context
             execution_time = (datetime.now() - start_time).total_seconds() * 1000  # ms
             self.execution_history.append({
                 "timestamp": start_time.isoformat(),
                 "success": True,
                 "execution_time_ms": execution_time,
                 "inputs": filtered_kwargs,
+                "execution_context": execution_context,
+                "context_confidence": context_confidence,
                 "output": str(result)[:100]  # Truncated
             })
             
             return result
             
         except Exception as e:
-            # Record failed execution
+            # Record failed execution with context
             self.execution_history.append({
                 "timestamp": start_time.isoformat(),
                 "success": False,
                 "error": str(e),
-                "inputs": kwargs
+                "inputs": kwargs,
+                "execution_context": execution_context,
+                "context_confidence": context_confidence if 'context_confidence' in locals() else 0.0
             })
             raise
+    
+    def _assess_context_compatibility(self, execution_context: Dict[str, Any]) -> float:
+        """Assess how well the current context matches this skill's requirements."""
+        if not execution_context or not self.success_conditions:
+            return 0.7  # Neutral confidence when no context available
+        
+        compatibility_score = 0.0
+        total_conditions = 0
+        
+        # Check success conditions
+        for category, conditions in self.success_conditions.items():
+            for condition in conditions:
+                total_conditions += 1
+                key = condition.split('=')[0]
+                expected_value = condition.split('=')[1] if '=' in condition else 'true'
+                
+                actual_value = str(execution_context.get(key, 'false')).lower()
+                expected_value = expected_value.lower()
+                
+                if actual_value == expected_value:
+                    compatibility_score += 1.0
+                elif key in execution_context:
+                    compatibility_score += 0.5  # Partial credit for having the key
+        
+        # Check failure patterns (inverse scoring)
+        failure_penalty = 0.0
+        for pattern, info in self.failure_patterns.items():
+            key = pattern.split('=')[0]
+            problematic_value = pattern.split('=')[1] if '=' in pattern else 'true'
+            
+            actual_value = str(execution_context.get(key, 'false')).lower()
+            problematic_value = problematic_value.lower()
+            
+            if actual_value == problematic_value:
+                failure_penalty += info.get('failure_rate', 0.5) * info.get('confidence', 0.5)
+        
+        # Calculate final compatibility score
+        if total_conditions > 0:
+            base_score = compatibility_score / total_conditions
+        else:
+            base_score = 0.7
+        
+        final_score = max(0.1, min(0.95, base_score - failure_penalty))
+        return final_score
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for this skill."""
@@ -227,9 +287,10 @@ class SkillRegistry:
             print(f"⚠️ Failed to build search index: {e}")
             self.skill_vectors = None
     
-    async def find_best_skill(self, task_description: str, confidence_threshold: float = 0.8) -> Optional[CompiledSkill]:
+    async def find_best_skill(self, task_description: str, execution_context: Dict[str, Any] = None, 
+                            confidence_threshold: float = 0.8) -> Optional[CompiledSkill]:
         """
-        Find the best matching skill for a task description.
+        Find the best matching skill for a task description and execution context.
         
         Returns the highest-confidence skill above the threshold, or None.
         """
@@ -245,26 +306,43 @@ class SkillRegistry:
             # Calculate cosine similarities
             similarities = cosine_similarity(task_vector, self.skill_vectors)[0]
             
-            # Find best matching skill
-            best_idx = np.argmax(similarities)
-            best_similarity = similarities[best_idx]
+            # Find best matching skill with context consideration
+            best_skill = None
+            best_score = 0.0
             
-            # Get the corresponding skill
             skill_ids = list(self.skills.keys())
-            best_skill = self.skills[skill_ids[best_idx]]
             
-            # Combine similarity score with skill confidence
-            combined_confidence = (best_similarity * 0.7) + (best_skill.confidence * 0.3)
+            for idx, similarity in enumerate(similarities):
+                skill = self.skills[skill_ids[idx]]
+                
+                # Calculate context compatibility if context provided
+                context_score = 1.0  # Default when no context
+                if execution_context:
+                    context_score = skill._assess_context_compatibility(execution_context)
+                
+                # Combine similarity, skill confidence, and context compatibility
+                combined_confidence = (similarity * 0.4) + (skill.confidence * 0.3) + (context_score * 0.3)
+                
+                if combined_confidence > best_score:
+                    best_score = combined_confidence
+                    best_skill = skill
             
-            print(f"🔍 Best match: {best_skill.name} (similarity: {best_similarity:.3f}, "
-                  f"skill_confidence: {best_skill.confidence:.3f}, combined: {combined_confidence:.3f})")
-            
-            # Check confidence threshold
-            if combined_confidence >= confidence_threshold:
-                self.retrieval_stats["successful_retrievals"] += 1
-                return best_skill
+            if best_skill:
+                similarity_score = similarities[skill_ids.index(best_skill.skill_id)]
+                context_score = best_skill._assess_context_compatibility(execution_context or {})
+                
+                print(f"🔍 Best match: {best_skill.name} (similarity: {similarity_score:.3f}, "
+                      f"skill_confidence: {best_skill.confidence:.3f}, context_score: {context_score:.3f}, "
+                      f"combined: {best_score:.3f})")
+                
+                # Check confidence threshold
+                if best_score >= confidence_threshold:
+                    self.retrieval_stats["successful_retrievals"] += 1
+                    return best_skill
+                else:
+                    print(f"💔 No skill meets confidence threshold {confidence_threshold:.1f}")
+                    return None
             else:
-                print(f"💔 No skill meets confidence threshold {confidence_threshold:.1f}")
                 return None
                 
         except Exception as e:

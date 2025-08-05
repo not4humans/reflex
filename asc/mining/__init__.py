@@ -11,6 +11,7 @@ from prefixspan import PrefixSpan
 
 from asc.core.models import SkillCandidate, TaskTrace, ToolCall
 from asc.storage.traces import TraceStorage
+from asc.context import analyze_context_patterns
 
 
 class PatternMiner:
@@ -97,13 +98,14 @@ class PatternMiner:
         return candidates
     
     async def _analyze_pattern_metrics(self, pattern: List[str]) -> Dict[str, float]:
-        """Analyze detailed metrics for a specific pattern."""
+        """Analyze detailed metrics for a specific pattern, including context patterns."""
         
         # Get all traces that contain this pattern
         all_traces = await self.storage.get_recent_traces(limit=10000)
         
         pattern_executions = []
         baseline_costs = []
+        pattern_traces = []
         
         for trace in all_traces:
             tool_sequence = [call.tool_name for call in trace.tool_calls]
@@ -118,6 +120,7 @@ class PatternMiner:
                         'cost': sum(call.cost_estimate for call in pattern_calls),
                         'latency': sum(call.latency_ms for call in pattern_calls)
                     })
+                    pattern_traces.append(trace)
             
             # Also collect baseline costs for individual tools
             for call in trace.tool_calls:
@@ -129,10 +132,11 @@ class PatternMiner:
                 'success_rate': 0.0,
                 'avg_cost': float('inf'),
                 'avg_latency': float('inf'),
-                'cost_efficiency': float('inf')
+                'cost_efficiency': float('inf'),
+                'context_patterns': {}
             }
         
-        # Calculate metrics
+        # Calculate basic metrics
         total_executions = len(pattern_executions)
         successful_executions = sum(1 for exec in pattern_executions if exec['success'])
         success_rate = successful_executions / total_executions
@@ -147,11 +151,26 @@ class PatternMiner:
         else:
             cost_efficiency = 1.0
         
+        # NEW: Analyze context patterns for this skill pattern
+        context_patterns = {}
+        if pattern_traces:
+            try:
+                context_analysis = await analyze_context_patterns(pattern_traces)
+                context_patterns = {
+                    'success_conditions': context_analysis.get('success_conditions', {}),
+                    'failure_patterns': context_analysis.get('failure_patterns', {}),
+                    'context_adaptations': context_analysis.get('context_adaptations', {})
+                }
+            except Exception as e:
+                print(f"⚠️  Context analysis failed for pattern {pattern}: {e}")
+                context_patterns = {}
+        
         return {
             'success_rate': success_rate,
             'avg_cost': avg_cost,
             'avg_latency': avg_latency,
-            'cost_efficiency': cost_efficiency
+            'cost_efficiency': cost_efficiency,
+            'context_patterns': context_patterns
         }
     
     def _sequence_contains_pattern(self, sequence: List[str], pattern: List[str]) -> bool:

@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
 from ..core.models import SkillCandidate, ToolCall
+from ..context import enhance_skill_with_context
 
 
 @dataclass
@@ -37,6 +38,21 @@ class CompilationStrategy(ABC):
     def validate_pattern(self, pattern: List[str]) -> bool:
         """Validate if the pattern is suitable for this compilation strategy."""
         pass
+    
+    # NEW: Context-aware compilation support
+    async def compile_with_context(self, candidate: SkillCandidate, storage=None) -> Optional[CompiledSkill]:
+        """Compile skill with context analysis if storage is available."""
+        skill = self.compile(candidate)
+        
+        if skill and storage:
+            # Enhance with context analysis
+            from ..context import enhance_skill_with_context
+            enhanced_metadata = await enhance_skill_with_context(
+                skill.metadata, candidate.tool_sequence, storage
+            )
+            skill.metadata.update(enhanced_metadata)
+        
+        return skill
 
 
 class PythonMacroStrategy(CompilationStrategy):

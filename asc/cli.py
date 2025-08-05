@@ -467,8 +467,12 @@ async def _run_retrieval(task: str, skills_dir: str, confidence_threshold: float
     
     console.print(f"📦 Loaded {loaded_count} skills into registry")
     
-    # Find best matching skill
-    matching_skill = await registry.find_best_skill(task, confidence_threshold)
+    # Find best matching skill (with empty context for now)
+    matching_skill = await registry.find_best_skill(
+        task, 
+        execution_context={},  # Empty context for CLI usage
+        confidence_threshold=confidence_threshold
+    )
     
     if not matching_skill:
         console.print(f"💔 No skill meets confidence threshold {confidence_threshold:.1f}", style="yellow")

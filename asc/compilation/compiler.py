@@ -9,13 +9,16 @@ from datetime import datetime
 
 from ..core.models import SkillCandidate
 from .strategies import CompilationStrategy, PythonMacroStrategy, LoRAStrategy, CompiledSkill
+from ..storage.traces import TraceStorage
 
 
 class SkillCompiler:
     """Main compiler that orchestrates skill compilation using different strategies."""
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, storage: Optional[TraceStorage] = None):
         """Initialize the skill compiler."""
+        self.storage = storage  # NEW: Storage for context analysis
+        
         # Load configuration from JSON file
         if config_path is None:
             config_path = "config/default.json"
@@ -86,7 +89,12 @@ class SkillCompiler:
             
             # Attempt compilation
             try:
-                compiled_skill = strategy.compile(candidate)
+                # NEW: Use context-aware compilation if storage available
+                if self.storage and hasattr(strategy, 'compile_with_context'):
+                    compiled_skill = await strategy.compile_with_context(candidate, self.storage)
+                else:
+                    compiled_skill = strategy.compile(candidate)
+                    
                 if compiled_skill:
                     compiled_skills.append(compiled_skill)
                     self.compiled_skills.append(compiled_skill)
