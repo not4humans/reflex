@@ -12,6 +12,7 @@ from .core import TracingAgent
 from .storage import TraceStorage
 from .mining import PatternMiner
 from .compilation import SkillCompiler
+from .validation import ValidationHarness
 
 app = typer.Typer(help="Agentic Skill Compiler - Human-centric skill compilation for multi-agent systems")
 console = Console()
@@ -196,6 +197,15 @@ def compile(
     asyncio.run(_run_compilation(limit, strategy, output_dir, min_confidence))
 
 
+@app.command()
+def validate(
+    skills_dir: str = typer.Option("compiled_skills", help="Directory containing compiled skills to validate"),
+    generate_report: bool = typer.Option(True, help="Generate HTML validation report")
+):
+    """Run Phase 5: Skill Validation Harness."""
+    asyncio.run(_run_validation(skills_dir, generate_report))
+
+
 async def _run_compilation(limit: int, strategy: str, output_dir: str, min_confidence: float):
     """Internal compilation runner."""
     console.print(f"🔧 Starting Phase 4: Skill Compilation", style="bold blue")
@@ -312,6 +322,105 @@ async def _run_compilation(limit: int, strategy: str, output_dir: str, min_confi
             console.print(f"    {strategy_name}: {count} skills")
     
     console.print(f"\n💾 Skills saved to: {saved_path}", style="bold green")
+
+
+async def _run_validation(skills_dir: str, generate_report: bool):
+    """Internal validation runner."""
+    console.print(f"🧪 Starting Phase 5: Validation Harness", style="bold blue")
+    console.print(f"📂 Validating skills in: {skills_dir}")
+    
+    # Initialize validation harness
+    harness = ValidationHarness()
+    await harness.initialize()
+    
+    # Check if skills directory exists
+    skills_path = Path(skills_dir)
+    if not skills_path.exists():
+        console.print(f"❌ Skills directory not found: {skills_dir}", style="bold red")
+        console.print("Run 'asc compile' first to generate skills!")
+        return
+    
+    # Count skill files
+    skill_files = list(skills_path.glob("*.py"))
+    if not skill_files:
+        console.print(f"❌ No skill files found in {skills_dir}", style="bold red")
+        console.print("Run 'asc compile' first to generate skills!")
+        return
+    
+    console.print(f"📋 Found {len(skill_files)} skill files to validate")
+    
+    # Run validation
+    results = await harness.validate_all_skills(skills_path)
+    
+    if "error" in results:
+        console.print(f"❌ Validation failed: {results['error']}", style="bold red")
+        return
+    
+    # Show results
+    summary = results["summary"]
+    console.print(f"\n🎯 Phase 5 Results:", style="bold green")
+    
+    # Create results table
+    table = Table(title="Validation Summary")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_column("Gate", style="yellow")
+    table.add_column("Status", style="bold")
+    
+    table.add_row(
+        "Skills Validated",
+        str(summary['total_skills']),
+        "-",
+        "✅"
+    )
+    
+    table.add_row(
+        "Success Rate",
+        f"{summary['success_rate']:.1%} ({summary['passed_skills']}/{summary['total_skills']})",
+        "≥ 85%",
+        "✅" if summary['success_rate'] >= 0.85 else "❌"
+    )
+    
+    table.add_row(
+        "Unit Test Pass Rate",
+        f"{summary['overall_unit_pass_rate']:.1%}",
+        "≥ 95%",
+        "✅" if summary['meets_research_gates']['unit_tests'] else "❌"
+    )
+    
+    table.add_row(
+        "Avg Cost Reduction",
+        f"{summary['average_cost_reduction']:.1%}",
+        "> 0%",
+        "✅" if summary['average_cost_reduction'] > 0 else "❌"
+    )
+    
+    console.print(table)
+    
+    # Research gates status
+    gates = summary['meets_research_gates']
+    console.print(f"\n📊 Research Paper Gates:", style="bold")
+    console.print(f"  Unit tests ≥ 95%: {'✅ PASS' if gates['unit_tests'] else '❌ FAIL'}")
+    console.print(f"  Phase 5 success: {'✅ PASS' if gates['phase_5_success'] else '❌ FAIL'}")
+    
+    if gates['unit_tests'] and gates['phase_5_success']:
+        console.print(f"\n🎉 Phase 5 SUCCESS: All research gates passed!", style="bold green")
+    else:
+        console.print(f"\n💔 Phase 5 FAILED: Research gates not met", style="bold red")
+    
+    # Show individual skill results
+    if len(results["validation_results"]) <= 5:  # Show details for small numbers
+        console.print(f"\n📋 Individual Skills:", style="bold")
+        for skill_name, result in results["validation_results"].items():
+            status = result.get('validation_status', 'UNKNOWN')
+            metadata = result.get('metadata', {})
+            
+            status_color = "green" if status == "PASSED" else "red" if status == "FAILED" else "yellow"
+            console.print(f"  {metadata.get('name', skill_name)}: {status}", style=status_color)
+    
+    # Report path
+    if generate_report:
+        console.print(f"\n📊 Detailed report: {results['report_path']}", style="bold blue")
 
 
 if __name__ == "__main__":

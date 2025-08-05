@@ -1,0 +1,37 @@
+{
+  "_description": "Test Configuration for demonstrating skill compilation with lower thresholds",
+  "mining": {
+    "min_support_percent": 1.0,
+    "min_success_rate": 0.5,
+    "max_cost_ratio": 2.0,
+    "min_pattern_length": 2,
+    "max_pattern_length": 6,
+    "trace_analysis_limit": 10000
+  },
+  "compilation": {
+    "strategy": "python_macro",
+    "validation_samples": 10,
+    "validation_threshold": 0.8
+  },
+  "validation": {
+    "unit_test_count": 10,
+    "fuzz_test_count": 5,
+    "unit_test_threshold": 0.8,
+    "fuzz_test_threshold": 0.7,
+    "max_cost_delta": 0.5
+  },
+  "retrieval": {
+    "confidence_threshold": 0.6,
+    "precision_test_queries": 100,
+    "target_precision": 0.8
+  },
+  "system": {
+    "dynamic_cost_measurement": true,
+    "cost_measurement_window": 50,
+    "auto_compilation": false,
+    "min_traces_for_mining": 10,
+    "mining_frequency": 50,
+    "max_active_skills": 100,
+    "min_weekly_usage": 2
+  }
+}
